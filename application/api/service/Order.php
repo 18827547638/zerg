@@ -9,6 +9,8 @@
 namespace app\api\service;
 
 
+use app\api\model\Order as OrderModel;
+use app\api\model\OrderProduct;
 use app\api\model\Product;
 use app\api\model\UserAddress;
 use app\lib\exception\OrderException;
@@ -22,6 +24,12 @@ class Order
     protected $products;
     protected $uid;
 
+    /**
+     * @param $uid int 用户id
+     * @param $oProducts array 客户端传过来的订单
+     * @return array
+     * @throws \Exception
+     */
     public function place($uid, $oProducts)
     {
         // oProducts 和 products 做对比
@@ -36,7 +44,55 @@ class Order
 
         // 开始创建订单
         $orderSnap = $this->snapOrder($status);
+        $order = $this->createOrder($orderSnap);
+        $order['pass'] = true;
+        return $order;
+    }
 
+    private function createOrder($snap)
+    {
+        try {
+            $orderNo = self::makeOrderNo();
+            $order = new OrderModel();
+
+            $order->user_id = $this->uid;
+            $order->order_no = $orderNo;
+            $order->total_price = $snap['orderPrice'];
+            $order->total_count = $snap['totalCount'];
+            $order->snap_img = $snap['snapImg'];
+            $order->snap_name = $snap['snapName'];
+            $order->snap_address = $snap['snapAddress'];
+            $order->snap_items = json_encode($snap['pStatus'], JSON_UNESCAPED_UNICODE);
+
+            $result = $order->save();
+
+            $orderID = $order->id;
+            $create_time = $order->create_time;
+
+            foreach ($this->oProducts as &$p) {
+                $p['order_id'] = $orderID;
+            }
+            $orderProduct = new OrderProduct();
+            $orderProduct->saveAll($this->oProducts);
+            return [
+                'order_no' => $orderNo,
+                'order_id' => $orderID,
+                'create_time' => $create_time
+            ];
+
+        } catch (\Exception $exception) {
+            throw $exception;
+        }
+    }
+
+    public static function makeOrderNo()
+    {
+        $yCode = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
+        $orderSn = $yCode[intval(date('Y')) - 2017] .
+            strtoupper(dechex(date('m'))) . date('d') .
+            substr(time(), -5) . substr(microtime(), 2, 5) .
+            sprintf('%02d', rand(0, 90));
+        return $orderSn;
     }
 
     // 生成订单快照
@@ -58,9 +114,10 @@ class Order
         $snap['snapName'] = $this->products[0]['name'];
         $snap['snapImg'] = $this->products[0]['main_img_url'];
 
-        if (count($this->products) > 1) {
-            $snap['snapName'] . '等';
+        if ($snap['totalCount'] > 1) {
+            $snap['snapName'] .= '等';
         }
+        return $snap;
     }
 
     private function getUserAddress()
@@ -79,7 +136,7 @@ class Order
     private function getOrderStatus()
     {
         $status = [
-            'pass' => false,
+            'pass' => true,
             'orderPrice' => 0,
             'totalCount' => 0,
             'pStatusArray' => [],
@@ -90,8 +147,8 @@ class Order
                 $oProduct['product_id'], $oProduct['count'], $this->products
             );
 
-            if ($pStatus['haveStock']) {
-                $status['pass'] = true;
+            if (!$pStatus['haveStock']) {
+                $status['pass'] = false;
             }
 
             $status['orderPrice'] += $pStatus['totalPrice'];
@@ -145,7 +202,7 @@ class Order
         }
 
         $products = Product::all($oPIDs)
-            ->visiable(['id', 'price', 'stock', 'name', 'main_img_url'])
+            ->visible(['id', 'price', 'stock', 'name', 'main_img_url'])
             ->toArray();
         return $products;
     }
