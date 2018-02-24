@@ -42,4 +42,9 @@ class Product extends Controller
         }
         return $product;
     }
+
+    public function deleteOne($id)
+    {
+
+    }
 }
