@@ -61,7 +61,7 @@ class Pay
         $wxOrderData->SetTotal_fee($totalPrice * 100);
         $wxOrderData->SetBody('零食商贩');
         $wxOrderData->SetOpenid($openid);
-        $wxOrderData->SetNotify_url('http://qq.com');
+        $wxOrderData->SetNotify_url(conifig('secure.pay_back_url'));
         return $this->getPaySignature($wxOrderData);
     }
 

@@ -8,4 +8,5 @@
 
 return [
     'token_salt' => 'sajkdfhas',
+    'pay_back_url' => 'http://z.cn/api/vi/pay/notify',
 ];
